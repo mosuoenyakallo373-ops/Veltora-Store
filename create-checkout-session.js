@@ -1,35 +1,38 @@
-import Stripe from 'stripe';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const { items } = req.body;
+    const { items, email } = req.body;
 
-    const line_items = items.map((item) => ({
-      price_data: {
-        currency: 'usd',
-        product_data: { name: item.name },
-        unit_amount: Math.round(item.price * 100),
+    const total = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+    const amountInCents = Math.round(total * 100);
+
+    const response = await fetch('https://api.paystack.co/transaction/initialize', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+        'Content-Type': 'application/json',
       },
-      quantity: item.qty,
-    }));
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items,
-      mode: 'payment',
-      success_url: `${req.headers.origin}/?success=true`,
-      cancel_url: `${req.headers.origin}/?canceled=true`,
-      shipping_address_collection: { allowed_countries: ['US', 'CA', 'GB', 'AU'] },
+      body: JSON.stringify({
+        email,
+        amount: amountInCents,
+        currency: 'ZAR',
+        callback_url: `${req.headers.origin}/?success=true`,
+        metadata: { items },
+      }),
     });
 
-    res.status(200).json({ url: session.url });
+    const data = await response.json();
+
+    if (!data.status) {
+      return res.status(400).json({ error: data.message });
+    }
+
+    res.status(200).json({ url: data.data.authorization_url });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-}
+        }
+        
