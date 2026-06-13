@@ -55,6 +55,33 @@ export default function Veltora() {
 
   const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
   const cartTotal = cart.reduce((sum, item) => sum + item.qty * item.price, 0);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [email, setEmail] = useState("");
+
+  const handleCheckout = async () => {
+    if (!email) {
+      alert('Please enter your email to continue.');
+      return;
+    }
+    setCheckoutLoading(true);
+    try {
+      const res = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: cart, email }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert('Something went wrong starting checkout.');
+      }
+    } catch (err) {
+      alert('Could not reach checkout. Please try again.');
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#F2EDE4] text-[#1C1B1A] font-serif">
@@ -219,7 +246,7 @@ export default function Veltora() {
                 <h3 className="font-display font-500 text-base leading-snug mb-1">{p.name}</h3>
                 <p className="text-sm text-[#6E6A66] mb-3 flex-1">{p.desc}</p>
                 <div className="flex items-center justify-between mt-auto">
-                  <span className="font-mono text-sm">${p.price}</span>
+                  <span className="font-mono text-sm">R{p.price}</span>
                   <button
                     onClick={() => addToCart(p)}
                     className="font-display text-xs uppercase tracking-wide bg-[#1C1B1A] text-[#F2EDE4] px-3 py-2 rounded-full hover:bg-[#C97B5E] transition-colors"
@@ -290,7 +317,7 @@ export default function Veltora() {
                     </div>
                     <div className="flex-1">
                       <p className="font-display font-500 text-sm">{item.name}</p>
-                      <p className="font-mono text-xs text-[#6E6A66]">${item.price}</p>
+                      <p className="font-mono text-xs text-[#6E6A66]">R{item.price}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -316,10 +343,21 @@ export default function Veltora() {
               <div className="pt-4 border-t border-[#1C1B1A]/10">
                 <div className="flex justify-between font-display font-600 text-lg mb-4">
                   <span>Total</span>
-                  <span className="font-mono">${cartTotal.toFixed(2)}</span>
+                  <span className="font-mono">R{cartTotal.toFixed(2)}</span>
                 </div>
-                <button className="w-full bg-[#1C1B1A] text-[#F2EDE4] font-display uppercase text-sm tracking-wide py-3 rounded-full hover:bg-[#C97B5E] transition-colors">
-                  Checkout
+                <input
+                  type="email"
+                  placeholder="Email for order confirmation"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-white/70 border border-[#1C1B1A]/15 rounded-full px-4 py-2.5 text-sm mb-3 outline-none focus:border-[#C97B5E]"
+                />
+                <button
+                  onClick={handleCheckout}
+                  disabled={checkoutLoading}
+                  className="w-full bg-[#1C1B1A] text-[#F2EDE4] font-display uppercase text-sm tracking-wide py-3 rounded-full hover:bg-[#C97B5E] transition-colors disabled:opacity-60"
+                >
+                  {checkoutLoading ? "Redirecting..." : "Checkout"}
                 </button>
               </div>
             )}
@@ -328,4 +366,4 @@ export default function Veltora() {
       )}
     </div>
   );
-}
+   }
