@@ -1,7 +1,6 @@
-import Stripe from 'stripe';
+import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
 
 export const config = {
@@ -21,35 +20,34 @@ function buffer(readable) {
 
 export default async function handler(req, res) {
   const buf = await buffer(req);
-  const sig = req.headers['stripe-signature'];
+  const signature = req.headers['x-paystack-signature'];
 
-  let event;
-  try {
-    event = stripe.webhooks.constructEvent(buf, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+  const hash = crypto
+    .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY)
+    .update(buf)
+    .digest('hex');
+
+  if (hash !== signature) {
+    return res.status(401).send('Invalid signature');
   }
 
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
+  const event = JSON.parse(buf.toString());
 
-    const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
-
-    const items = lineItems.data.map((item) => ({
-      name: item.description,
-      qty: item.quantity,
-      price: item.amount_total / 100 / item.quantity,
-    }));
+  if (event.event === 'charge.success') {
+    const { data } = event;
+    const items = data.metadata?.items || [];
 
     await supabase.from('orders').insert({
-      customer_name: session.customer_details?.name || '',
-      customer_email: session.customer_details?.email || '',
+      customer_name: data.customer?.first_name
+        ? `${data.customer.first_name} ${data.customer.last_name || ''}`.trim()
+        : '',
+      customer_email: data.customer?.email || '',
       items,
-      total: session.amount_total / 100,
+      total: data.amount / 100,
       status: 'paid',
     });
   }
 
   res.status(200).json({ received: true });
-                     }
-    
+    }
+      
