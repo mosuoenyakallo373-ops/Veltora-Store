@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Veltora — online storefront for daily essentials, trip gear, accessories, and gadgets.",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
